@@ -220,8 +220,15 @@ export default function Home() {
           <div style={{ fontSize: 20, fontWeight: 900, letterSpacing: '-0.02em' }}>
             WC26 Edge Finder <span style={{ color: C.accent }}>↗</span>
           </div>
-          <div style={{ fontSize: 11, color: C.dim, marginTop: 2 }}>
-            Poisson + Monte Carlo · Dixon-Coles · Kelly Sizing · AI-Refreshed Every 24h
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 2 }}>
+            <div style={{ fontSize: 11, color: C.dim }}>
+              Poisson + Monte Carlo · Dixon-Coles · Kelly Sizing · AI-Refreshed Every 24h
+            </div>
+            <Link href="/backtest"
+              style={{ background: C.gold + '22', color: C.gold, border: `1px solid ${C.gold}44`,
+                borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 800, textDecoration: 'none', whiteSpace: 'nowrap' }}>
+              📊 Backtest
+            </Link>
           </div>
         </div>
       </div>
