@@ -115,9 +115,80 @@ function MatchCard({ match }) {
 }
 
 // ── BEST BETS PAGE ───────────────────────────────────────────────────────────
+function BetCard({ match, bet, odds, edge, note, rank, expired, promoted, onPromote, onDemote }) {
+  const gCol = groupColor(match.group);
+  const col = edgeColor(edge);
+  const dim = expired;
+  return (
+    <div style={{ display: 'flex', gap: 0, alignItems: 'stretch', marginBottom: 10 }}>
+      {/* Promote/demote button column */}
+      {!expired && (
+        <button onClick={onDemote} title="Move to past"
+          style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '10px 0 0 10px',
+            borderRight: 'none', padding: '0 10px', cursor: 'pointer', color: C.dim, fontSize: 14,
+            display: 'flex', alignItems: 'center' }}>
+          ↓
+        </button>
+      )}
+      {expired && (
+        <button onClick={onPromote} title="Bring back to active"
+          style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '10px 0 0 10px',
+            borderRight: 'none', padding: '0 10px', cursor: 'pointer', color: C.accent, fontSize: 14,
+            display: 'flex', alignItems: 'center' }}>
+          ↑
+        </button>
+      )}
+      <Link href={`/match/${match.id}`} style={{ textDecoration: 'none', flex: 1 }}>
+        <div style={{
+          background: dim ? C.surface : C.card,
+          border: `1px solid ${expired ? C.border : edge >= 12 ? C.accent + '44' : C.border}`,
+          borderRadius: '0 10px 10px 0', padding: '12px 14px', cursor: 'pointer',
+          opacity: dim ? 0.6 : 1,
+        }}
+          onMouseEnter={e => !dim && (e.currentTarget.style.borderColor = C.accent)}
+          onMouseLeave={e => !dim && (e.currentTarget.style.borderColor = edge >= 12 ? C.accent + '44' : C.border)}>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+            <div style={{ fontFamily: 'monospace', fontWeight: 900, color: dim ? C.dim : col, fontSize: 22, minWidth: 24, lineHeight: 1 }}>
+              {expired ? '✓' : rank}
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 5, alignItems: 'center' }}>
+                <span style={{ background: gCol + '22', color: gCol, border: `1px solid ${gCol}44`,
+                  borderRadius: 3, padding: '1px 6px', fontSize: 10, fontWeight: 700 }}>GRP {match.group}</span>
+                <span style={{ fontSize: 12, color: C.dim }}>{match.home} vs {match.away} · {match.date}</span>
+                {(match.result || expired) && (
+                  <span style={{ background: C.dim + '22', color: C.dim, borderRadius: 3, padding: '1px 6px', fontSize: 10, fontWeight: 700 }}>
+                    {match.result ? `FINAL: ${match.result}` : 'EXPIRED'}
+                  </span>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 5, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 15, fontWeight: 900, color: dim ? C.dim : C.text }}>{bet}</span>
+                {odds && <span style={{ background: C.gold + '22', color: C.gold, border: `1px solid ${C.gold}44`,
+                  borderRadius: 4, padding: '2px 8px', fontSize: 11, fontWeight: 700, fontFamily: 'monospace' }}>
+                  {americanStr(odds)}
+                </span>}
+                {!expired && <span style={{ background: col + '22', color: col, border: `1px solid ${col}44`,
+                  borderRadius: 4, padding: '2px 8px', fontSize: 11, fontWeight: 700, fontFamily: 'monospace' }}>
+                  +{edge}% EDGE
+                </span>}
+              </div>
+              {note && !expired && <div style={{ fontSize: 11, color: C.dim, lineHeight: 1.5 }}>{note}</div>}
+              {!expired && <div style={{ marginTop: 5, fontSize: 11, color: C.accent }}>Full analysis →</div>}
+            </div>
+          </div>
+        </div>
+      </Link>
+    </div>
+  );
+}
+
 function BestBetsPage() {
-  const allBets = ALL_MATCHES
-    .filter(m => !m.result && MATCH_INTEL[m.id]?.bestBet)
+  const today = new Date().toISOString().split('T')[0];
+
+  // All bets with intel, split into active vs expired by date/result
+  const allRaw = ALL_MATCHES
+    .filter(m => MATCH_INTEL[m.id]?.bestBet)
     .map(m => {
       const intel = MATCH_INTEL[m.id];
       return {
@@ -126,63 +197,77 @@ function BestBetsPage() {
         odds: intel.bestBetOdds,
         edge: intel.bestBetEdge,
         note: intel.keyEdge,
+        isExpired: !!(m.result || m.date < today),
       };
     })
-    .filter(b => b.edge)
-    .sort((a, b) => b.edge - a.edge);
+    .filter(b => b.edge);
+
+  // Track which expired items have been manually promoted back
+  const [promoted, setPromoted] = useState(new Set());
+  // Track which active items have been manually demoted
+  const [demoted, setDemoted] = useState(new Set());
+  const [showPast, setShowPast] = useState(false);
+
+  const active = allRaw.filter(b =>
+    (!b.isExpired || promoted.has(b.match.id)) && !demoted.has(b.match.id)
+  ).sort((a, b) => b.edge - a.edge);
+
+  const expired = allRaw.filter(b =>
+    (b.isExpired || demoted.has(b.match.id)) && !promoted.has(b.match.id)
+  ).sort((a, b) => new Date(b.match.date) - new Date(a.match.date));
 
   return (
     <div>
       <div style={{ background: C.accent + '10', border: `1px solid ${C.accent}25`, borderRadius: 10,
-        padding: '12px 16px', marginBottom: 16 }}>
-        <div style={{ fontSize: 11, color: C.accent, fontWeight: 700, marginBottom: 4 }}>
-          📊 MODEL METHODOLOGY
-        </div>
-        <div style={{ fontSize: 12, color: C.dim, lineHeight: 1.6 }}>
-          Edges calculated using Poisson scoring model with Dixon-Coles correction, 40K Monte Carlo trials per match.
-          Injury/form/venue adjustments applied manually from scouting intel. Sorted by model edge — highest value bets first.
+        padding: '10px 14px', marginBottom: 14 }}>
+        <div style={{ fontSize: 11, color: C.accent, fontWeight: 700, marginBottom: 2 }}>📊 MODEL METHODOLOGY</div>
+        <div style={{ fontSize: 11, color: C.dim, lineHeight: 1.5 }}>
+          Poisson + Dixon-Coles · 40K Monte Carlo trials · Sorted by model edge.
+          Use ↓ to archive a pick, ↑ to restore. Expired games auto-move to Past section.
         </div>
       </div>
 
-      {allBets.map(({ match, bet, odds, edge, note }, i) => {
-        const gCol = groupColor(match.group);
-        const col = edgeColor(edge);
-        return (
-          <Link key={match.id} href={`/match/${match.id}`} style={{ textDecoration: 'none', display: 'block' }}>
-            <div style={{ background: C.card, border: `1px solid ${edge >= 12 ? C.accent + '44' : C.border}`,
-              borderRadius: 10, padding: '14px 16px', marginBottom: 10, cursor: 'pointer' }}
-              onMouseEnter={e => e.currentTarget.style.borderColor = C.accent}
-              onMouseLeave={e => e.currentTarget.style.borderColor = edge >= 12 ? C.accent + '44' : C.border}>
-              <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-                <div style={{ fontFamily: 'monospace', fontWeight: 900, color: col, fontSize: 24, minWidth: 28, lineHeight: 1 }}>
-                  {i + 1}
-                </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 6, alignItems: 'center' }}>
-                    <span style={{ background: gCol + '22', color: gCol, border: `1px solid ${gCol}44`,
-                      borderRadius: 3, padding: '1px 6px', fontSize: 10, fontWeight: 700 }}>GRP {match.group}</span>
-                    <span style={{ fontSize: 12, color: C.dim }}>{match.home} vs {match.away}</span>
-                    <span style={{ fontSize: 11, color: C.dim }}>· {match.date}</span>
-                  </div>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6, flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: 16, fontWeight: 900, color: C.text }}>{bet}</span>
-                    {odds && <span style={{ background: C.gold + '22', color: C.gold, border: `1px solid ${C.gold}44`,
-                      borderRadius: 4, padding: '2px 8px', fontSize: 12, fontWeight: 700, fontFamily: 'monospace' }}>
-                      {americanStr(odds)}
-                    </span>}
-                    <span style={{ background: col + '22', color: col, border: `1px solid ${col}44`,
-                      borderRadius: 4, padding: '2px 8px', fontSize: 12, fontWeight: 700, fontFamily: 'monospace' }}>
-                      +{edge}% EDGE
-                    </span>
-                  </div>
-                  {note && <div style={{ fontSize: 12, color: C.dim, lineHeight: 1.5 }}>{note}</div>}
-                  <div style={{ marginTop: 6, fontSize: 11, color: C.accent }}>Click for full analysis →</div>
-                </div>
-              </div>
+      {/* Active bets */}
+      {active.length === 0 ? (
+        <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: 20,
+          textAlign: 'center', color: C.dim, marginBottom: 14 }}>
+          No active bets — restore picks from past section using ↑
+        </div>
+      ) : (
+        active.map(({ match, bet, odds, edge, note }, i) => (
+          <BetCard key={match.id} match={match} bet={bet} odds={odds} edge={edge} note={note}
+            rank={i + 1} expired={false}
+            onDemote={() => setDemoted(prev => new Set([...prev, match.id]))}
+            onPromote={() => {}} />
+        ))
+      )}
+
+      {/* Past / expired section */}
+      {expired.length > 0 && (
+        <div style={{ marginTop: 8 }}>
+          <button onClick={() => setShowPast(p => !p)}
+            style={{ width: '100%', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8,
+              padding: '10px 14px', cursor: 'pointer', color: C.dim, fontSize: 12, fontWeight: 700,
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>📁 Past / Expired Picks ({expired.length})</span>
+            <span style={{ fontSize: 14 }}>{showPast ? '▲' : '▼'}</span>
+          </button>
+
+          {showPast && (
+            <div style={{ marginTop: 8 }}>
+              {expired.map(({ match, bet, odds, edge, note }) => (
+                <BetCard key={match.id} match={match} bet={bet} odds={odds} edge={edge} note={note}
+                  rank={0} expired={true}
+                  onPromote={() => {
+                    setPromoted(prev => new Set([...prev, match.id]));
+                    setDemoted(prev => { const s = new Set(prev); s.delete(match.id); return s; });
+                  }}
+                  onDemote={() => {}} />
+              ))}
             </div>
-          </Link>
-        );
-      })}
+          )}
+        </div>
+      )}
     </div>
   );
 }
